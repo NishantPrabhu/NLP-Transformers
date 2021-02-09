@@ -31,8 +31,8 @@ class MaskedLanguageModelling:
 
         # Models, optimizer and scheduler
         self.encoder = networks.Encoder(self.config['encoder']).to(self.device)
-        self.clf_head = networks.ClassificationHead(self.config['clf_head']).to(self.device)
-        self.embeds = nn.Embedding(len(self.train_loader.vocab), self.config['encoder']['embed_dim'])
+        self.clf_head = networks.ClassificationHead(self.config['encoder']['model_dim'], len(self.train_loader.vocab)).to(self.device)
+        self.embeds = nn.Embedding(len(self.train_loader.vocab), self.config['encoder']['embed_dim']).to(self.device)
         
         self.optim = train_utils.get_optimizer(
             config = self.config['optim'], 
@@ -207,8 +207,8 @@ class AdverseEventClassification:
 
         # Models, optimizer and scheduler
         self.encoder = networks.Encoder(self.config['encoder']).to(self.device)
-        self.clf_head = networks.ClassificationHead(self.config['clf_head']).to(self.device)
-        self.embeds = nn.Embedding(len(self.train_loader.vocab), self.config['encoder']['embed_dim'])
+        self.clf_head = networks.ClassificationHead(self.config['encoder']['model_dim'], 2).to(self.device)
+        self.embeds = nn.Embedding(len(self.train_loader.vocab), self.config['encoder']['embed_dim']).to(self.device)
         
         self.optim = train_utils.get_optimizer(
             config = self.config['optim'], 

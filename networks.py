@@ -81,9 +81,9 @@ class Encoder(nn.Module):
 
 class ClassificationHead(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, model_dim, num_classes):
         super().__init__()
-        self.fc = nn.Linear(config['model_dim'], config['num_classes'])
+        self.fc = nn.Linear(model_dim, num_classes)
 
     def forward(self, x):
         ''' Input will have size (bs, seq_length, model_dim) '''
