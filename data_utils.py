@@ -69,7 +69,7 @@ class MaskedLMDataLoader:
             idx_to_replace = np.random.choice(np.arange(len(words)), size=math.ceil(0.15*len(words)), replace=False)
             trg = []
             for j in idx_to_replace:
-                trg.append(words[j])
+                trg.append(self.word2idx.get(words[j], '[UNK]'))
                 if random.random() < 0.8:
                     words[j] = '[MASK]'
                 else:
@@ -94,7 +94,7 @@ class MaskedLMDataLoader:
 
 class ClassificationDataLoader:
 
-    def __init__(self, data, labels, batch_size, shuffle=True):
+    def __init__(self, data, labels, batch_size, shuffle=True, device=None):
         self.preprocessor = TextPreprocessor()
         self.preprocessor.run(data)
         self.batch_size = batch_size
@@ -103,10 +103,11 @@ class ClassificationDataLoader:
         self.main_words = self.preprocessor.main_words
         self.vocab = self.preprocessor.vocab
         self.word2idx = self.preprocessor.word2idx
-        self.ptr = 0
+        self.ptr = 0  
         if shuffle:
             seq = np.random.permutation(np.arange(len(self.data)))
             self.data = self.data[seq]
+            self.labels = self.labels[seq]
 
     def __len__(self):
         return len(self.data) // self.batch_size
@@ -145,8 +146,9 @@ def get_dataloaders(task, root, val_size, batch_size):
             lines = load_data(root)
             data, labels = [], []
             for l in lines:
-                data.append(l.split(',')[0])
-                labels.append(int(l.split(',')[1]))
+                if len(l) > 0:
+                    data.append(l.split('\t')[0])
+                    labels.append(int(l.split('\t')[1]))
             data, labels = np.asarray(data), np.asarray(labels)
         else:
             raise NotImplementedError(f'File data.txt not found at {root}. Please rename the file containing data to data.txt!')

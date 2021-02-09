@@ -1,8 +1,9 @@
 
 # Configuration file for masked language modelling
 
-epochs: 100
-batch_size: 32
+epochs: 20
+eval_every: 5
+batch_size: 2
 val_size: 0.2
 
 encoder:

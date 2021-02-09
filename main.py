@@ -5,7 +5,7 @@ Main script.
 
 import models
 import argparse
-import datetime.datetime as dt
+from datetime import datetime as dt
 
 
 if __name__ == '__main__':

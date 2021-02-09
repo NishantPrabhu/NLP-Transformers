@@ -51,7 +51,7 @@ class MaskedLanguageModelling:
             self.logger.record(f'Total trainable parameters: {total_params}', mode='info')
         
         # Losses and performance monitoring
-        self.criterion = losses.MaskedCrossentropyLoss()
+        self.criterion = losses.MaskedCrossentropyLoss(self.device)
         self.best_val_acc = 0
         run = wandb.init("medical-transformer-mlm")
         self.logger.write(run.get_url(), mode='info')
@@ -77,26 +77,23 @@ class MaskedLanguageModelling:
 
     def train_on_batch(self, batch):
         inp, trg, mask = batch
+        inp = inp.to(self.device)
         out = self.clf_head(self.encoder(self.embeds(inp)))
         
-        loss = self.criterion(out, trg, mask)
+        loss, acc = self.criterion(out, trg, mask)
         self.optim.zero_grad()
         loss.backward()
         self.optim.step()
-
-        preds = out[:, mask, :].argmax(dim=-1)
-        acc = preds.eq(trg.view_as(preds)).sum() / trg.numel()
-        return {'Loss': loss.item(), 'Accuracy': acc.item()}
+        return {'Loss': loss.item(), 'Accuracy': acc}
 
     def validate_on_batch(self, batch):
         inp, trg, mask = batch
+        inp = inp.to(self.device)
         with torch.no_grad():
             out = self.clf_head(self.encoder(self.embeds(inp)))
         
-        loss = self.criterion(out, trg, mask)
-        preds = out[:, mask, :].argmax(dim=-1)
-        acc = preds.eq(trg.view_as(preds)).sum() / trg.numel()
-        return {'Loss': loss.item(), 'Accuracy': acc.item()}
+        loss, acc = self.criterion(out, trg, mask)
+        return {'Loss': loss.item(), 'Accuracy': acc}
 
     def adjust_learning_rate(self, epoch):
         if epoch < self.warmup_epochs:
@@ -157,7 +154,7 @@ class MaskedLanguageModelling:
             self.logger.record('Epoch [{:3d}/{}]'.format(epoch, self.config['epochs']), mode='train')
             self.adjust_learning_rate(epoch+1)
 
-            for idx in len(self.train_loader):
+            for idx in range(len(self.train_loader)):
                 batch = self.train_loader.flow()
                 train_metrics = self.train_on_batch(batch)
                 wandb.log({'Loss': train_metrics['Loss'], 'Epoch': epoch})
@@ -176,7 +173,8 @@ class MaskedLanguageModelling:
             if epoch % self.config['eval_every'] == 0:
                 self.logger.record('Epoch [{:3d}/{}]'.format(epoch, self.config['epochs']), mode='val')
                 
-                for idx, batch in enumerate(self.val_loader):
+                for idx in range(len(self.val_loader)):
+                    batch = self.val_loader.flow()
                     val_metrics = self.validate_on_batch(batch)
                     val_meter.add(val_metrics)
                     common.progress_bar(progress=idx/len(self.val_loader), status=val_meter.return_msg())
@@ -190,7 +188,7 @@ class MaskedLanguageModelling:
                     self.best_val_acc = val_metrics['Accuracy']
                     self.save_model()
 
-        self.logger.record('\nTraining complete!', mode='info')
+        print('\n\n[INFO] Training complete!')
         self.save_embeds_for_projection()
 
 
@@ -227,7 +225,7 @@ class AdverseEventClassification:
             self.logger.record(f'Total trainable parameters: {total_params}', mode='info')
         
         # Losses and performance monitoring
-        self.criterion = losses.ClassificationLoss()
+        self.criterion = losses.ClassificationLoss(self.device)
         self.best_val_acc = 0
         run = wandb.init("medical-transformer-aec")
         self.logger.write(run.get_url(), mode='info')
@@ -253,26 +251,23 @@ class AdverseEventClassification:
 
     def train_on_batch(self, batch):
         inp, trg = batch
+        inp = inp.to(self.device)
         out = self.clf_head(self.encoder(self.embeds(inp)))
         
-        loss = self.criterion(out, trg)
+        loss, acc = self.criterion(out, trg)
         self.optim.zero_grad()
         loss.backward()
         self.optim.step()
-
-        preds = out[:, 0, :].argmax(dim=-1)
-        acc = preds.eq(trg.view_as(preds)).sum() / trg.numel()
-        return {'Loss': loss.item(), 'Accuracy': acc.item()}
+        return {'Loss': loss.item(), 'Accuracy': acc}
 
     def validate_on_batch(self, batch):
         inp, trg = batch
+        inp = inp.to(self.device)
         with torch.no_grad():
             out = self.clf_head(self.encoder(self.embeds(inp)))
         
-        loss = self.criterion(out, trg)
-        preds = out[:, 0, :].argmax(dim=-1)
-        acc = preds.eq(trg.view_as(preds)).sum() / trg.numel()
-        return {'Loss': loss.item(), 'Accuracy': acc.item()}
+        loss, acc = self.criterion(out, trg)
+        return {'Loss': loss.item(), 'Accuracy': acc}
 
     def adjust_learning_rate(self, epoch):
         if epoch < self.warmup_epochs:
@@ -333,7 +328,7 @@ class AdverseEventClassification:
             self.logger.record('Epoch [{:3d}/{}]'.format(epoch, self.config['epochs']), mode='train')
             self.adjust_learning_rate(epoch+1)
 
-            for idx in len(self.train_loader):
+            for idx in range(len(self.train_loader)):
                 batch = self.train_loader.flow()
                 train_metrics = self.train_on_batch(batch)
                 wandb.log({'Loss': train_metrics['Loss'], 'Epoch': epoch})
@@ -352,7 +347,8 @@ class AdverseEventClassification:
             if epoch % self.config['eval_every'] == 0:
                 self.logger.record('Epoch [{:3d}/{}]'.format(epoch, self.config['epochs']), mode='val')
                 
-                for idx, batch in enumerate(self.val_loader):
+                for idx in range(len(self.val_loader)):
+                    batch = self.val_loader.flow()
                     val_metrics = self.validate_on_batch(batch)
                     val_meter.add(val_metrics)
                     common.progress_bar(progress=idx/len(self.val_loader), status=val_meter.return_msg())
@@ -366,5 +362,5 @@ class AdverseEventClassification:
                     self.best_val_acc = val_metrics['Accuracy']
                     self.save_model()
 
-        self.logger.record('\nTraining complete!', mode='info')
+        print('\n\n[INFO] Training complete!')
         self.save_embeds_for_projection()

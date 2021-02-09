@@ -34,7 +34,7 @@ class SelfAttention(nn.Module):
         attn_scores = torch.einsum('bhid,bhjd->bhij', [q, k]) / math.sqrt(self.model_dim)           # (bs, heads, n, n)                           
         attn_probs = F.softmax(attn_scores, dim=-1)
         context = torch.einsum('bhij,bhjd->bhid', [attn_probs, v])                                  # (bs, heads, n, d)
-        context = context.permute(0, 2, 1, 3).contiguous.view(bs, n, -1)                            # (bs, n, model_dim)
+        context = context.permute(0, 2, 1, 3).contiguous().view(bs, n, -1)                            # (bs, n, model_dim)
 
         return self.layer_norm(context + x)
 
@@ -67,6 +67,7 @@ class EncoderBlock(nn.Module):
 class Encoder(nn.Module):
 
     def __init__(self, config):
+        super().__init__()
         model_dim = config['model_dim']
         ff_dim = config['ff_dim']
         num_heads = config['num_heads']
