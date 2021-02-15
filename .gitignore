@@ -1,0 +1,8 @@
+
+.vscode/
+__pycache__/
+mlm/
+aec/
+data/
+wandb/
+notebooks/
