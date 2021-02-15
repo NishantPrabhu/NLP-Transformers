@@ -1,20 +1,20 @@
 
 # Configuration file for masked language modelling
 
-epochs: 20
-eval_every: 5
-batch_size: 2
+epochs: 1000
+eval_every: 10
+batch_size: 32
 val_size: 0.2
 
 encoder:
   num_layers: 6
-  num_heads: 8
-  model_dim: 256
-  embed_dim: 256
-  ff_dim: 512
+  num_heads: 12
+  model_dim: 516
+  embed_dim: 516
+  ff_dim: 516
 
 optim:
-  name: sgd
+  name: adam
   lr: 0.001
   weight_decay: 0.0001
 

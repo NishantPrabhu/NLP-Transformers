@@ -28,6 +28,7 @@ class MaskedLanguageModelling:
         self.train_loader, self.val_loader = data_utils.get_dataloaders(
             task='mlm', root=args['data_root'], val_size=self.config['val_size'], batch_size=self.config['batch_size'])
         self.done_epochs = 0
+        self.logger.record(f'Training vocab size: {len(self.train_loader.vocab)}', mode='info')
 
         # Models, optimizer and scheduler
         self.encoder = networks.Encoder(self.config['encoder']).to(self.device)
@@ -52,7 +53,7 @@ class MaskedLanguageModelling:
         
         # Losses and performance monitoring
         self.criterion = losses.MaskedCrossentropyLoss(self.device)
-        self.best_val_acc = 0
+        self.best_val = 1e09
         run = wandb.init("medical-transformer-mlm")
         self.logger.write(run.get_url(), mode='info')
 
@@ -76,24 +77,38 @@ class MaskedLanguageModelling:
                 raise NotImplementedError(f"No saved model found at {args['load']}")
 
     def train_on_batch(self, batch):
-        inp, trg, mask = batch
+        sents, inp, trg, trg_words, mask = batch
         inp = inp.to(self.device)
         out = self.clf_head(self.encoder(self.embeds(inp)))
+
+        # DEBUG
+        # pred_words = self.train_loader.decode_tokens(out[0, mask[0], :].argmax(dim=-1))
+        # print("Sentence:", sents[0])
+        # print("Targets:", trg_words[0])
+        # print("Pred words:", pred_words[0]) 
+        # print()
         
         loss, acc = self.criterion(out, trg, mask)
         self.optim.zero_grad()
         loss.backward()
         self.optim.step()
-        return {'Loss': loss.item(), 'Accuracy': acc}
+        return {'Loss': loss.item(), 'Accuracy': acc, 'Perplexity': 2**loss.item()}
 
     def validate_on_batch(self, batch):
-        inp, trg, mask = batch
+        sents, inp, trg, trg_words, mask = batch
         inp = inp.to(self.device)
         with torch.no_grad():
             out = self.clf_head(self.encoder(self.embeds(inp)))
-        
+
+        # DEBUG
+        # pred_words = self.train_loader.decode_tokens(out[0, mask[0], :].argmax(dim=-1))
+        # print("Sentence:", sents[0])
+        # print("Targets:", trg_words[0])
+        # print("Pred words:", pred_words[0]) 
+        # print()
+
         loss, acc = self.criterion(out, trg, mask)
-        return {'Loss': loss.item(), 'Accuracy': acc}
+        return {'Loss': loss.item(), 'Accuracy': acc, 'Perplexity': 2**loss.item()}
 
     def adjust_learning_rate(self, epoch):
         if epoch < self.warmup_epochs:
@@ -163,7 +178,7 @@ class MaskedLanguageModelling:
 
             common.progress_bar(progress=1, status=train_meter.return_msg())
             self.logger.write(train_meter.return_msg(), mode='train')
-            wandb.log({'Train accuracy': train_meter.return_metrics()['Accuracy'], 'Epoch': epoch})
+            wandb.log({'Train perplexity': train_meter.return_metrics()['Perplexity'], 'Epoch': epoch})
             wandb.log({'Learning rate': self.optim.param_groups[0]['lr'], 'Epoch': epoch})
 
             # Save state
@@ -182,10 +197,10 @@ class MaskedLanguageModelling:
                 common.progress_bar(progress=1, status=val_meter.return_msg())
                 self.logger.write(val_meter.return_msg(), mode='val')
                 val_metrics = val_meter.return_metrics()
-                wandb.log({'Validation loss': val_metrics['Loss'], 'Validation accuracy': val_metrics['Accuracy'], 'Epoch': epoch})
+                wandb.log({'Validation loss': val_metrics['Loss'], 'Validation perplexity': val_metrics['Perplexity'], 'Epoch': epoch})
 
-                if val_metrics['Accuracy'] > self.best_val_acc:
-                    self.best_val_acc = val_metrics['Accuracy']
+                if val_metrics['Perplexity'] < self.best_val:
+                    self.best_val = val_metrics['Perplexity']
                     self.save_model()
 
         print('\n\n[INFO] Training complete!')

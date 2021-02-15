@@ -17,13 +17,13 @@ class TextPreprocessor:
         self.data = None
         self.vocab = None
         self.word2idx = None
+        self.idx2word = None
 
     def clean_text_(self, texts):
         new = [t.lower() for t in texts]
         new = [t.translate(str.maketrans(string.punctuation, ' '*len(string.punctuation))) for t in new]
-        new = [re.sub(r'\d+ml', 'ml', t) for t in new]
-        new = [re.sub(r'\d+ ml', 'ml', t) for t in new]
         new = [t for t in new if len(t.split()) > 0]
+        new = [re.sub(r'\d+', ' [num] ', t) for t in new]
         new = [' '.join(t.split()) for t in new]
         return new
 
@@ -39,8 +39,9 @@ class TextPreprocessor:
         words = self.get_vocab_(clean_texts)
         self.data = np.asarray(clean_texts)
         self.main_words = words
-        self.vocab = ['[CLS]', '[PAD]'] + words + ['[MASK]', '[UNK]']
+        self.vocab = ['[cls]', '[pad]'] + words + ['[mask]', '[unk]']
         self.word2idx = {word: i for i, word in enumerate(self.vocab)}
+        self.idx2word = {i: word for i, word in enumerate(self.vocab)}
 
 
 class MaskedLMDataLoader:
@@ -53,6 +54,7 @@ class MaskedLMDataLoader:
         self.main_words = self.preprocessor.main_words
         self.vocab = self.preprocessor.vocab
         self.word2idx = self.preprocessor.word2idx
+        self.idx2word = self.preprocessor.idx2word
         self.ptr = 0
         if shuffle:
             seq = np.random.permutation(np.arange(len(self.data)))
@@ -63,33 +65,45 @@ class MaskedLMDataLoader:
             
     def pad_mask_tokenize_(self, lines):
         maxlen = max([len(t.split()) for t in lines])
-        tokens, targets, mask_idx = [], [], []
+        sents, tokens, targets, target_words, mask_idx = [], [], [], [], []
         for i in range(len(lines)):
             words = lines[i].split()
             idx_to_replace = np.random.choice(np.arange(len(words)), size=math.ceil(0.15*len(words)), replace=False)
-            trg = []
+            trg, trg_words = [], []
             for j in idx_to_replace:
-                trg.append(self.word2idx.get(words[j], '[UNK]'))
+                trg.append(self.word2idx.get(words[j], '[unk]'))
+                trg_words.append(words[j])
                 if random.random() < 0.8:
-                    words[j] = '[MASK]'
-                else:
+                    words[j] = '[mask]'
+                elif random.random() < 0.5:
                     words[j] = random.choice(self.main_words)
+                else:
+                    words[j] = words[j]
             
-            words = ['[CLS]'] + words + ['[PAD]'] * (maxlen - len(words))
+            words = ['[cls]'] + words + ['[pad]'] * (maxlen - len(words))
             targets.append(torch.LongTensor(trg))
+            target_words.append(trg_words)
             mask_idx.append(torch.LongTensor([c+1 for c in idx_to_replace]))
-            tokens.append([self.word2idx.get(w, '[UNK]') for w in words])
-        return tokens, targets, mask_idx
+            tokens.append([self.word2idx.get(w, '[unk]') for w in words])
+            sents.append(' '.join(words))
+        return sents, tokens, targets, target_words, mask_idx
+
+    def decode_tokens(self, tokens):
+        answers = []
+        for t in [tokens.detach().cpu().numpy()]:
+            ans = [self.idx2word.get(int(i)) for i in t]
+            answers.append(ans)
+        return answers
 
     def flow(self):
         lines = self.data[self.ptr: self.ptr+self.batch_size]
-        tokens, targets, mask_idx = self.pad_mask_tokenize_(lines)
+        sents, tokens, targets, target_words, mask_idx = self.pad_mask_tokenize_(lines)
 
         self.ptr += self.batch_size
         if self.ptr >= len(self.data):
             self.ptr = 0
 
-        return torch.LongTensor(tokens), targets, mask_idx   
+        return sents, torch.LongTensor(tokens), targets, target_words, mask_idx   
 
 
 class ClassificationDataLoader:
@@ -117,8 +131,8 @@ class ClassificationDataLoader:
         tokens = []
         for i in range(len(lines)):
             words = lines[i].split()
-            words = ['[CLS]'] + words + ['[PAD]'] * (maxlen - len(words))
-            tokens.append([self.word2idx.get(w, '[UNK]') for w in words])
+            words = ['[cls]'] + words + ['[pad]'] * (maxlen - len(words))
+            tokens.append([self.word2idx.get(w, '[unk]') for w in words])
         return tokens
 
     def flow(self):
@@ -154,7 +168,7 @@ def get_dataloaders(task, root, val_size, batch_size):
             raise NotImplementedError(f'File data.txt not found at {root}. Please rename the file containing data to data.txt!')
 
     val_idx = np.random.choice(np.arange(len(data)), size=int(val_size * len(data)), replace=False)
-    train_idx = np.array([i for i in np.arange(len(data)) if i not in val_idx])
+    train_idx = np.array([i for i in np.arange(len(data))])
 
     if task == 'mlm':
         train_data, val_data = data[train_idx], data[val_idx]
@@ -180,22 +194,28 @@ def load_data(root):
 if __name__ == '__main__':
 
     sents = [
-        'My name is nishant',
-        'I have decided to go for a walk',
-        'This is probably not going to work',
-        'Thats very unfortunate honestly',
+        'My name is nishant. I like to play chess.',
+        'I have decided to go for a walk. Will you come with me?',
+        'This is probably not going to work. We should back off, I say.',
+        'Thats very unfortunate honestly. It shouldnt have happened.',
         'Who was at the door?',
-        'Yeah this seems like a good idea',
-        'I dont understand what the problem really is',
-        "They're worried a litte too much about privacy",
-        'Umm what?',
-        "Phew! That was a tough one"
+        'Yeah this seems like a good idea. Lets go with it.',
+        'I dont understand what the problem really is.',
+        "They're worried a litte too much about privacy.",
+        'Umm what? What did you say?',
+        "Phew! That was a tough one."
     ]
 
     mlm = MaskedLMDataLoader(sents, batch_size=2, shuffle=True)
     print("Num batches:", len(mlm))
     for _ in range(20):
-        tokens = mlm.flow()
-        print(tokens[0])
-        print(tokens[1])
+        sents, tokens, targets, target_words, mask_idx = mlm.flow()
+
+        for i in range(len(sents)):
+            print(sents[i])
+            print(target_words[i])
+            print(mask_idx[i])
+            print()
+        
+        print()
         print()

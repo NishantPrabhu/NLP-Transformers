@@ -14,7 +14,7 @@ class MaskedCrossentropyLoss(nn.Module):
     def __init__(self, device):
         super().__init__()
         self.device = device
-        self.loss_fn = nn.NLLLoss()
+        self.loss_fn = nn.CrossEntropyLoss()
 
     def forward(self, output, target, mask):
         '''
@@ -43,7 +43,7 @@ class ClassificationLoss(nn.Module):
     def __init__(self, device):
         super().__init__()
         self.device = device
-        self.loss_fn = nn.NLLLoss()
+        self.loss_fn = nn.CrossEntropyLoss()
 
     def forward(self, output, target):
         '''

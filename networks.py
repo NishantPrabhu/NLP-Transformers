@@ -88,4 +88,4 @@ class ClassificationHead(nn.Module):
 
     def forward(self, x):
         ''' Input will have size (bs, seq_length, model_dim) '''
-        return F.log_softmax(self.fc(x), dim=-1)
+        return self.fc(x)
